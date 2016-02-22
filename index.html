@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
+
+	<meta name="apple-mobile-web-app-capable" content="yes">
+	<meta name="mobile-web-app-capable" content="yes">
+
+	<title>Ast-Ore-Oids</title>
+
+	<script src="GameObject.class.js" type="text/javascript"></script>
+	<script src="sound.class.js" type="text/javascript"></script>
+	<script src="music.class.js" type="text/javascript"></script>
+	<!--<script src="sprite_2.class.js" type="text/javascript"></script>//-->
+	<script src="sprite.js" type="text/javascript"></script>
+	<script src="images.class.js" type="text/javascript"></script>
+	<script src="ship.class.js" type="text/javascript"></script>
+	<script src="enemyship.class.js" type="text/javascript"></script>
+	<script src="shields.class.js" type="text/javascript"></script>
+	<script src="asteroid.class.js" type="text/javascript"></script>
+	<script src="ore.class.js" type="text/javascript"></script>
+	<script src="wreckage.class.js" type="text/javascript"></script>
+	<script src="mine.class.js" type="text/javascript"></script>
+	<script src="energy.class.js" type="text/javascript"></script>
+	<script src="EnergyCapacitor.class.js" type="text/javascript"></script>
+	<script src="Level.class.js" type="text/javascript"></script>
+	<script src="missile.class.js" type="text/javascript"></script>
+	<script src="jquery-2.1.1.min.js" type="text/javascript"></script>
+
+	<style type="text/css" rel="stylesheet">
+	body {
+		background-color:#000000;
+	}
+
+	canvas {
+		display: block;
+		position: absolute;
+		margin: auto;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		right: 0;
+	}
+	</style>
+</head>
+<body>
+<noscript>
+<p>For full functionality of this page it is necessary to enable JavaScript.
+Here are the <a href="http://www.enable-javascript.com/" target="_blank">
+instructions how to enable JavaScript in your web browser</a>.</p>
+</noscript>
+<script type="text/javascript">
+var 
+//Setup Variables
+_VERSION = '0.8',
+_MAXWIDTH = 800,
+_MAXHEIGHT = 600,
+
+//Data
+sound = false,
+music = false,
+tutorialPage = 1,
+score = 0,
+frames = {
+	"lastCall": Date.now(),
+	"update": function() {
+		this.delta = (Date.now() - this.lastCall) / 1000;
+		this.lastCall = Date.now();
+	},
+	"delta": 0,
+},
+canvas,
+ctx,
+
+//Sprites
+spriteImage, 
+s_toolbar,
+s_logo,
+s_endCredits,
+s_text = { },
+s_buttonHighlight = { },
+s_ships = { },
+s_buttons = { },
+s_collectables = { },
+s_hazards = { },
+s_offonSwitch = { },
+s_menuScreens = { },
+s_tutorialScreen = { },
+s_tierbackgrounds = { },
+s_abilities = { },
+
+//Sizes
+width = 0,
+height = 0,
+gameWidth = 0,
+gameHeight = 0,
+
+//GameBoard data 
+PlayerShip = null,
+Capacitor = null,
+GameLevel = null,
+EnemyShips = [ ],
+Mines = [ ],
+Shields = [ ],
+Ores = [ ],
+Asteroids = [ ],
+EnergyCapsule = [ ],
+Wreckages = [ ],
+Missiles = [ ],
+
+//Audio
+music = null,
+sound = null,
+img = null,
+
+//States 
+currentstate,
+states = {"Intro":0, "Menu":1, "Options":2, "Controls":3, "Tutorial":4, "Credits":5, "Game":6, "TierPause": 10, "Score":7, "End":8, "Paused":9},
+
+//Game Objects
+Keys = {
+	"Z": 90,
+	"X": 88,
+	"C": 67,
+	"W":87,
+	"A": 65,
+	"S": 83,
+	"D": 68,
+	"P": 80,
+	"left": 37,
+	"right": 39,
+	"down": 40,
+	"up": 38,
+	"esc":27,
+	"space":32
+}
+;
+
+function Main() { //Same as Init(). Just preload all data here.
+	//document.addEventListener(GameStateListener, )
+	currentstate = states.Intro;
+	document.title += " "+_VERSION;
+	canvas = document.createElement("canvas");
+	
+	width = window.innerWidth;
+	height = window.innerHeight;
+	
+	if (width > _MAXWIDTH) {
+		width = _MAXWIDTH;
+	}
+	if (height > _MAXHEIGHT) {
+		height = _MAXHEIGHT;
+	}
+	
+	canvas.style.border = "1px solid #FFFFFF";
+	
+	//set the width and height
+	canvas.width = width;
+	canvas.height = height;
+	ctx = canvas.getContext("2d");
+	
+	document.body.appendChild(canvas);
+	$(canvas).attr("tabindex", 0);
+	
+	//Create listeners on the canvas
+	canvas.addEventListener("touchend", MouseListener, false);
+	canvas.addEventListener("mouseup", MouseListener, false);
+	canvas.addEventListener("keydown", KeyListener, false);
+	canvas.focus();
+	canvas.onblur = function() {
+		this.focus(); //Lets always make sure the canvas is always focused
+	}
+	
+	if (!(!!canvas.getContext && canvas.getContext("2d"))) {
+		alert("Your browser doesn't support HTML5, please update your browser to latest version");
+	}
+	
+	//Now load the images and sprites
+	music = new Music();
+	sound = new Sound();
+	spriteImage = new Image();
+	spriteImage.onload = function() {
+		InitSprites(this);
+		Run();
+	}
+	spriteImage.src = "images/AOOSprites.png";
+}
+
+function Run() { //The game loop
+	s_logo.fadeIn();
+	var loop = function() {
+		ctx.textAlign = "center";
+		Update();
+		Render();
+		window.requestAnimationFrame(loop, canvas);
+	}
+	window.requestAnimationFrame(loop, canvas);
+}
+
+function Update() {
+	frames.update();
+	
+	if (currentstate == states.Game) {
+		$.each(Ores, function(i, ore) {
+			ore.Update(frames.delta);
+		});
+		$.each(Shields, function(i, shield) {
+			shield.Update(frames.delta);
+		});
+		$.each(EnemyShips, function(i, enemyship) {
+			enemyship.Update(frames.delta);
+		});
+		$.each(Mines, function(i, mine) {
+			mine.Update(frames.delta);
+		});
+		$.each(Missiles, function(i, missile) {
+			missile.Update(frames.delta, PlayerShip.location);
+		});
+		$.each(Asteroids, function(i, asteroid) {
+			asteroid.Update(frames.delta);
+		});
+		$.each(EnergyCapsule, function(i, energy) {
+			energy.Update(frames.delta);
+		});
+		PlayerShip.Update(frames.delta);
+		Capacitor.Update(frames.delta, PlayerShip);
+		Collisions();
+	}
+}
+
+function Render() {
+	ctx.clearRect(0, 0, width, height);
+
+	//We need to render placements to draw everything.
+	switch (currentstate) {
+		case states.Intro:
+			music.PlayIntro();
+			if (!s_logo.isDoneFading()) {
+				if (s_logo.isFadeIn) {
+					s_logo.opacity += .00145;
+					if (s_logo.opacity >= .999) {
+						s_logo.opacity = 1;
+						s_logo.fadeOut();
+					}
+				}
+				else if (s_logo.isFadeOut){
+					s_logo.opacity -= .00145;
+					if (s_logo.opacity <= .001) {
+						s_logo.opacity = 0;
+						s_logo.doneFading();
+						s_menuScreens.menu.fadeIn();
+					}
+				}
+				ctx.save();
+				
+				ctx.globalAlpha = s_logo.opacity;
+				s_logo.draw(ctx, (width - s_logo.width) / 2, (height - s_logo.height) / 2);
+				ctx.restore();
+			}
+			else if (!s_menuScreens.menu.isDoneFading()) {
+				if (s_menuScreens.menu.isFadeIn) {
+					s_menuScreens.menu.opacity += .00145;
+					if (s_menuScreens.menu.opacity >= .999) {
+						s_menuScreens.menu.opacity = 1;
+						s_menuScreens.menu.doneFading();
+					}
+				}
+				ctx.save();
+				
+				ctx.globalAlpha = s_menuScreens.menu.opacity;
+				s_menuScreens.menu.draw(ctx, 0 ,0);
+				ctx.restore();
+			}
+			else {
+				s_menuScreens.menu.draw(ctx, 0 ,0);
+				currentstate = states.Menu;
+			}
+			break;
+		case states.Menu:
+			music.PlayMainMenu();
+			s_menuScreens.menu.draw(ctx, 0, 0);
+			s_buttonHighlight.big.draw(ctx, 0 ,0);
+			s_buttons.start.draw(ctx, 0, 290);
+			break;
+		case states.Options:
+			s_menuScreens.options.draw(ctx, 0, 0);
+			s_offonSwitch[+music.isMuted].draw(ctx, 335, 185)
+			s_offonSwitch[+sound.isMuted].draw(ctx, 335, 365);
+			break;
+		case states.Controls:
+			s_menuScreens.controls.draw(ctx, 0, 0);
+			break;
+		case states.Tutorial:
+			s_tutorialScreen[tutorialPage].draw(ctx, 0, 0);
+			break;
+		case states.Credits:
+			s_menuScreens.credits.draw(ctx, 0, 0);
+			break;
+		case states.Paused:
+			DrawGameObjects(.3);
+			ctx.font = "24px Arial";
+			ctx.fillStyle = "#FFFFFF";
+			ctx.fillText("Paused: ", gameWidth / 2, (gameHeight / 2) - 50);
+			ctx.fillText("Music: " + (music.isMuted ? "(Off)" : "(On)"), (gameWidth / 2), (gameHeight / 2) - 20);
+			ctx.fillText("Sound: "+ (sound.isMuted ? "(Off)" : "(On)"), (gameWidth / 2), (gameHeight / 2) + 10);
+			ctx.fillText("Main Menu", (gameWidth / 2), (gameHeight / 2) + 40);
+			
+			DrawToolBar();
+			break;
+		case states.Score:
+			//This is when the PlayerShip explodes. 
+			DrawGameObjects(.3);
+			ctx.fillText("Your ship has exploded!", gameWidth / 2, gameHeight / 2);
+			ctx.fillText("Pressing space will take you back to the menu.", gameWidth / 2, gameHeight / 2 + 30)
+			ctx.fillText("Your score: "+score, gameWidth / 2, (gameHeight / 2) + 60);
+			
+			DrawToolBar();
+			break;
+		case states.End:
+			//This is just to do a smooth fadeout for all the elements
+			//So the credits will show up easier.
+			if (!s_endCredits.isDoneFading()) {
+				if (s_endCredits.isFadeOut) {
+					if (s_endCredits.opacity <= 0.2) {
+						s_endCredits.opacity = 1;
+						s_endCredits.doneFading();
+						
+						//Set the location of the X and Y position of the credits.
+						s_endCredits.location.X = (gameWidth - s_endCredits.width) / 2;
+						s_endCredits.location.Y = height;
+					}
+					else {
+						s_endCredits.opacity -= frames.delta / 5;
+						DrawGameObjects(s_endCredits.opacity);
+					}
+				}
+			}
+			else {
+				DrawGameObjects(0.2);
+				
+				//We want to bring up the location of the X
+				if (s_endCredits.location.Y > -s_endCredits.height) {
+					s_endCredits.location.Y -= .75;
+					s_endCredits.draw(ctx, s_endCredits.location.X, s_endCredits.location.Y);
+				}
+				else {
+					ctx.textAlight = "center";
+					ctx.fillText("Congratulations for completing your journey!", (gameWidth / 2), gameHeight / 2);
+					ctx.fillText("Click anywhere to return to the menu.", (gameWidth / 2), (gameHeight / 2) + 30);
+				}
+			}
+			
+			DrawToolBar();
+			break;
+		case states.TierPause:
+			DrawGameObjects();
+			ctx.fillText("Pressing space will continue your journey", gameWidth / 2, gameHeight / 2);
+			DrawToolBar();
+			break;
+		case states.Game:
+			DrawGameObjects();
+			DrawToolBar();
+			break;
+	}
+}
+
+function DrawGameObjects(alpha) {
+	if (alpha) ctx.globalAlpha = alpha;
+	
+	//Draw the game background
+	if (!s_tierbackgrounds[GameLevel.tier - 1].isDoneFading()) {
+		if (s_tierbackgrounds[GameLevel.tier - 1].isFadeOut) {
+			s_tierbackgrounds[GameLevel.tier - 1].opacity -= .002;
+			
+			if (s_tierbackgrounds[GameLevel.tier - 1].opacity <= .002) {
+				s_tierbackgrounds[GameLevel.tier - 1].opacity = 1;
+				s_tierbackgrounds[GameLevel.tier - 1].doneFading();
+				
+				s_tierbackgrounds[GameLevel.tier].opacity = 0;
+				s_tierbackgrounds[GameLevel.tier].fadeIn();
+			}
+		}
+		
+		ctx.save();
+		ctx.globalAlpha = s_tierbackgrounds[GameLevel.tier - 1].opacity;
+		s_tierbackgrounds[GameLevel.tier - 1].draw(ctx, 0, 0);
+		ctx.restore();
+	}
+	else if (!s_tierbackgrounds[GameLevel.tier].isDoneFading()) {
+		if (s_tierbackgrounds[GameLevel.tier].isFadeIn) {
+			s_tierbackgrounds[GameLevel.tier].opacity += .001;
+			
+			if (s_tierbackgrounds[GameLevel.tier].opacity >=.99) {
+				s_tierbackgrounds[GameLevel.tier].opacity = 1;
+				s_tierbackgrounds[GameLevel.tier].doneFading();
+			}
+		}
+		
+		ctx.save();
+		ctx.globalAlpha = s_tierbackgrounds[GameLevel.tier].opacity;
+		if (currentstate == states.TierPause) {
+			if (s_tierbackgrounds[GameLevel.tier].opacity >= .6) {
+				ctx.globalAlpha = .6;
+			}
+		}
+		s_tierbackgrounds[GameLevel.tier].draw(ctx, 0, 0);
+		ctx.restore();
+	}
+	else {
+		ctx.save();
+		if (currentstate == states.TierPause) {
+			if (s_tierbackgrounds[GameLevel.tier].opacity >= .6) {
+				ctx.globalAlpha = .6;
+			}
+		}
+		s_tierbackgrounds[GameLevel.tier].draw(ctx, 0, 0);
+		ctx.restore();
+	}
+	//End GameBackground changes
+
+	$.each(Wreckages, function(i, wreckage) {
+		wreckage.Draw(ctx);
+	});
+	$.each(Mines, function(i, mine) {
+		mine.Draw(ctx);
+	});
+	$.each(Ores, function(i, ore) {
+		ore.Draw(ctx);
+	});
+	$.each(Shields, function(i, shield) {
+		shield.Draw(ctx);
+	});
+	$.each(EnemyShips, function(i, enemyship) {
+		enemyship.Draw(ctx);
+	});
+	$.each(Missiles, function(i, missile) {
+		missile.Draw(ctx);
+	});
+	$.each(Asteroids, function(i, asteroid) {
+		asteroid.Draw(ctx);
+	});
+	$.each(EnergyCapsule, function(i, energy) {
+		energy.Draw(ctx);
+	});
+	
+	PlayerShip.Draw(ctx);
+	
+	ctx.globalAlpha = 1;
+}
+
+function DrawToolBar() {
+	//This toolbar should remain at full opacity regardless of what state it is in
+	s_tierbackgrounds.field.draw(ctx, 0, 0);
+	
+	ctx.globalAlpha = 1;
+	
+	s_toolbar.img.draw(ctx, 0, canvas.height - s_toolbar.img.height);
+	
+	ctx.font = "24px Arial";
+	ctx.fillStyle = "#FFFFFF";
+	
+	s_text.level.draw(ctx, GameLevel.level);
+	s_text.exp.draw(ctx, GameLevel.getRequiredEXP());
+	s_text.score.draw(ctx, score);
+	s_text.energy.draw(ctx, Capacitor.energyLevel);
+	
+	ctx.globalAlpha = s_abilities.afterburner.opacity;
+	s_abilities.afterburner.img.draw(ctx, s_abilities.afterburner.displayX, s_abilities.afterburner.displayY);
+	
+	ctx.globalAlpha = s_abilities.shields.opacity;
+	s_abilities.shields.img.draw(ctx, s_abilities.shields.displayX, s_abilities.shields.displayY);
+
+	ctx.globalAlpha = s_abilities.crusher.opacity;
+	s_abilities.crusher.img.draw(ctx, s_abilities.crusher.displayX, s_abilities.crusher.displayY);
+	
+	ctx.globalAlpha = 1;
+}
+
+function KeyListener(evt) {
+	switch (currentstate) {
+		case states.Game:
+			switch(evt.keyCode) {
+				case Keys.W: //W
+				case Keys.up: //Up arrow
+					//Move the player up
+					PlayerShip.ChangeDirection(PlayerShip.directions.up);
+					break;
+				case Keys.A: //A
+				case Keys.left: //Left arrow 
+					//Move the player left
+					PlayerShip.ChangeDirection(PlayerShip.directions.left);
+					break;
+				case Keys.S: //S
+				case Keys.down: //down arrow
+					//Move the player down
+					PlayerShip.ChangeDirection(PlayerShip.directions.down);
+					break;
+				case Keys.D: //D
+				case Keys.right: //right arrow
+					//Move the player right
+					PlayerShip.ChangeDirection(PlayerShip.directions.right);
+					break;
+				case Keys.Z: //Z
+				case Keys.X: //X
+				case Keys.C: //C
+					Capacitor.AbilityUsed(evt.keyCode, 15);
+					break;
+				case Keys.P: //P
+					currentstate = states.Paused;
+					break;
+			}
+			break;
+		case states.Paused:
+			switch(evt.keyCode) {
+				case Keys.P:
+					currentstate = states.Game;
+					break;
+			}
+			break;
+		case states.Intro:
+			switch (evt.keyCode) {
+				case Keys.esc:
+					currentstate = states.Menu;
+					break;
+			}
+			break;
+		case states.TierPause:
+			if (evt.keyCode == Keys.space) {
+				currentstate = states.Game;
+				music.PlayTier(GameLevel.tier);
+			}
+			break;
+		case states.Score:
+			if (evt.keyCode == Keys.space) {
+				currentstate = states.Menu;
+				music.PlayMainMenu();
+			}
+			break;
+	}
+}
+
+function MouseListener(evt) {
+	x = evt.offsetX;
+	y = evt.offsetY;
+	
+	if (evt.targetTouches) {
+		x = evt.targetTouches[0].pageX;
+		y = evt.targetTouches[0].pageY;
+	}
+	
+	switch (currentstate) {
+		case states.Menu:
+		case states.Options:
+		case states.Controls:
+		case states.Tutorial:
+		case states.Credits:
+			if (y <= 30 && y >= 0) {
+				if (x >= 0 && x <= 280) { //Main menu
+					currentstate = states.Menu;
+					console.log("Changing state to Main");
+				}
+				else if (x >= 282 && x <= 410) { //Options
+					currentstate = states.Options;
+					console.log("Changing state to Options");
+				}
+				else if (x >= 412 && x <= 542) { // Controls
+					currentstate = states.Controls;
+					console.log("Changing state to Controls");
+				}
+				else if (x >= 544 && x <= 672) { //Tutorial
+					currentstate = states.Tutorial;
+					tutorialPage = 1;
+					console.log("Changing state to Tutorial");
+				}
+				else if (x >= 675 && x <= 800) { //Credits
+					currentstate = states.Credits;
+					console.log("Changing state to Credits");
+				}
+			}
+			break;
+			
+		case states.Paused:
+			if (x >= 330 && x <= 460 && y >= 225 && y <= 240) {
+				//Toggle Music
+				music.Mute();
+			}
+			else if (x >= 330 && x <= 460 && y >= 250 && y <= 275) {
+				//Toggle Sound
+				sound.Mute();
+			}
+			else if (x >= 335 && x <= 455 && y >= 285 && y <= 300) {
+				//Send user to Main Menu
+				currentstate = states.Menu;
+			}
+			break;
+		case states.End:
+			if (s_endCredits.location.Y <= -s_endCredits.height && s_endCredits.isDoneFading()) {
+				currentstate = states.Menu;
+			}
+			break;
+	}
+	
+	if (currentstate == states.Options) {
+		if (x >= 335 && x <= 445 && y >= 185 && y <= 235) {  // Music button
+			music.Mute();
+			console.log("Music state changed");
+		}
+		else if (x >= 340 && x <= 465 && y >= 365 && y <= 415) {  // Sound button
+			sound.Mute();
+			console.log("Sound state changed");
+		}
+	}
+	else if (currentstate == states.Tutorial) {
+		if (x >= 620 && x <= 775 && y >= 553 && y <= 600 && tutorialPage < 4) {  //Tutorial + button
+			tutorialPage++;
+		}
+		else if (x >= 20 && x <= 180 && y >= 550 && y <= 600 && tutorialPage > 1) {  //Tutorial - button
+			tutorialPage--;
+		}
+	}
+	else if (currentstate == states.Menu) {
+		if (x >= 0 && x <= 160 && y >= 290 && y <= 325) {  //Start button
+			gameHeight = canvas.height - s_toolbar.img.height;
+			gameWidth = canvas.width;
+			
+			EnemyShips = [ ];
+			Mines = [ ];
+			Missiles = [ ];
+			Shields = [ ];
+			Ores = [ ];
+			Asteroids = [ ];
+			EnergyCapsule = [ ];
+			Wreckages = [ ];			
+			GameLevel = new Level(TierUpListener);
+			PlayerShip = new Ship();
+			Capacitor = new EnergyCapacitor(PlayerShip);
+			
+			
+			currentstate = states.Game;
+			console.log("Game is starting");
+		}
+	}
+}
+
+function Collisions() {
+	PlayerCollisions(); //Only collectables can interact with the Player.
+	MineCollisions();
+	EnemyShipCollisions();
+	AsteroidCollisions();
+	MissileCollisions();
+}
+
+function PlayerCollisions() {
+	//PlayerShip Collisions
+	WreckagesCollected = [];
+	hazardCollisions = [];
+	$.each(Mines, function() { hazardCollisions.push(this) });
+	$.each(EnemyShips, function() { hazardCollisions.push(this) });
+	$.each(Asteroids, function() { hazardCollisions.push(this) });
+	$.each(Missiles, function() { hazardCollisions.push(this) });
+	
+	//Only the collectables here! Takes less time
+	$.each(Ores, function(i, object) {
+		if (PlayerShip.Collision(object)) {
+			if (isNaN(score) || isNaN(object.points)) {
+				console.log("This ore is bad: "+object);
+			}
+			score += object.points;
+			GameLevel.EXPGain(object.exp);
+			PlayerShip.Trail(object);
+			object.CollisionActions(GameLevel.tier);
+			sound.PlaySound("point");
+		}
+	});
+	$.each(Shields, function(i, object) { 
+		if (PlayerShip.Collision(object)) {
+			PlayerShip.GainShields(1);
+			object.CollisionActions();
+			sound.PlaySound("point");
+		}
+	});
+	$.each(EnergyCapsule, function(i, object) { 
+		if (PlayerShip.Collision(object)) {
+			Capacitor.EnergyGained(object.energy);
+			object.CollisionActions();
+			sound.PlaySound("point");
+		}
+	});
+	$.each(Wreckages, function(i, object) { 
+		if (PlayerShip.Collision(object)) {
+			score += object.points;
+			sound.PlaySound("point");
+			WreckagesCollected.push(i);
+		}
+	});
+	$.each(WreckagesCollected, function(i, num) {
+		Wreckages.splice(num, 1);
+	});
+	
+	$.each(hazardCollisions, function(i, object) {
+		if (object.Collision(PlayerShip)) {
+			PlayerShip.CollisionActions();
+			object.CollisionActions();
+			sound.PlaySound("damage");
+		}
+	});
+	
+	
+	//Is player off the map?
+	if (PlayerShip.location.X > gameWidth || PlayerShip.location.X < 0 || PlayerShip.location.Y > gameHeight || PlayerShip.location.Y < 0) {
+		PlayerShipExploded();
+	}
+}
+
+function MineCollisions() {
+	//These can collide with anything
+	//Combine all objects as they will use the "Colliison"
+	objects = [];
+	//mineExploded = [];
+	
+	$.each(Shields, function() 		{ objects.push(this) });
+	$.each(Ores, function() 		{ objects.push(this) });
+	$.each(Asteroids, function() 	{ objects.push(this) });
+	$.each(EnemyShips, function() 	{ objects.push(this); });
+	$.each(Missiles, function() 	{ hazardCollisions.push(this) });
+	
+	$.each(Mines, function(i, mine) {
+		$.each(objects, function(x, object) {
+			if (mine.Collision(object)) {
+				object.CollisionActions(GameLevel.tier);
+				mine.CollisionActions();
+				//mineExploded.push(i);
+			}
+			else {
+				if (mine.hasExploded) {
+					//mineExploded.push(i);
+				}
+			}
+		});
+	});
+	
+	/* $.each(mineExploded, function(i, x) {
+		Mines.splice(x, 1);
+	});*/
+	
+	mines = [];
+	$.each(Mines, function(i, e) {
+		if (!e.hasExploded) {
+			mines.push(e);
+		}
+	});
+	
+	Mines = mines;
+}
+
+function EnemyShipCollisions() {
+	//These can collide with anything
+	//Combine all objects as they will use the "Colliison"
+	objects = [];
+	
+	$.each(Shields, function() { objects.push(this) });
+	$.each(Ores, function() { objects.push(this) });
+	$.each(Asteroids, function() { objects.push(this) });
+	$.each(Missiles, function() { hazardCollisions.push(this) });
+	
+	$.each(EnemyShips, function(i, enemyship) {
+		$.each(objects, function(i, object) {
+			if (enemyship.Collision(object)) {
+				object.CollisionActions(GameLevel.tier);
+				enemyship.CollisionActions();
+			}
+		});
+	});
+}
+
+function AsteroidCollisions() {
+	//Combine all objects as they will use the "Colliison"
+	objects = [];
+	
+	$.each(Shields, function() { objects.push(this) });
+	$.each(Ores, function() { objects.push(this) });
+	
+	$.each(Asteroids, function(i, asteroid) {
+		$.each(objects, function(i, object) {
+			if (asteroid.Collision(object)) {
+				asteroid.CollisionActions();
+				object.CollisionActions(GameLevel.tier);
+			}
+		});
+	});
+}
+
+function MissileCollisions() {
+	objects = [];
+	//missilesExploded = [];
+
+	$.each(Shields, function() 		{ objects.push(this) });
+	$.each(Ores, function() 		{ objects.push(this) });
+	$.each(Asteroids, function() 	{ objects.push(this) });
+	
+	$.each(Missiles, function(i, missile) {
+		$.each(objects, function(x, object) {
+			if (missile.Collision(object)) {
+				object.CollisionActions(GameLevel.tier);
+				missile.CollisionActions();
+				//missilesExploded.push(i);
+			}
+
+			//if (missile.hasExploded) {
+				//missilesExploded.push(i);
+			//}
+		});
+	});
+	
+	//$.each(missilesExploded, function(i, x) {
+	//	Missiles.splice(x, 1);
+	//});
+	
+	missles = [];
+	$.each(Missiles, function(i, e) {
+		if (!e.hasExploded) {
+			missles.push(e);
+		}
+	});
+	
+	Missiles = missles;
+}
+
+function PlayerShipExploded() {
+	currentstate = states.Score;
+	music.PlayGameOver();
+}
+
+function CreateWreckage(x, y) {
+	Wreckages.push(new Wreckage(x, y));
+}
+
+function TierUpListener(tier) {
+	//This is where we add new challenges to the game
+	//.... and some benefits.
+	if (tier != 1) {
+		s_tierbackgrounds[tier - 1].fadeOut();
+		music.PlayTier("finish");
+		currentstate = states.TierPause;
+	}
+	else {
+		music.PlayTier(tier);
+	}
+	
+	switch(tier){
+		case 6:
+			currentstate = states.End;
+			s_endCredits.fadeOut(); 
+			break;
+		case 5:
+			EnemyShips.push(new EnemyShip());
+			break;
+		case 4:
+			
+			break;
+		case 3:
+			Asteroids.push(new Asteroid("A"));
+			Asteroids.push(new Asteroid("B"));
+			EnemyShips.push(new EnemyShip());
+			break;
+		case 2:
+			Asteroids.push(new Asteroid("B"));
+			EnergyCapsule.push(new Energy());
+			break;
+		case 1:
+			Asteroids.push(new Asteroid("B"));
+			EnemyShips.push(new EnemyShip());
+			Ores.push(new Ore(tier));
+			Shields.push(new Shield());
+			break;
+        }
+}
+
+function isOffScreen(x, y, sprite) {
+	if (!x && !y) {
+		return true;
+	}
+
+	if (
+		(x + sprite.width) > 0 && (x - sprite.width) < gameWidth 
+		&&
+		(y + sprite.height) > 0 && (y - sprite.height) < gameHeight
+	) {
+		return false;
+	}
+	else {
+		return true;
+	}
+}
+
+function ShipPlacedMine(x ,y) {
+	Mines.push(new Mine(x, y, GameLevel.tier));
+}
+
+function FireMissile(x, y) {
+	Missiles.push(new Missile(x, y));
+}
+
+//Start the game
+Main();
+
+/*
+(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+ga('create', 'UA-7365302-7', 'auto');
+ga('send', 'pageview');
+*/
+</script>
+</body>
+</html>
